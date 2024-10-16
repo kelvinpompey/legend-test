@@ -46,11 +46,15 @@ const crudStore$ = observable(
   })
 );
 
+let todos$ = observable(() => {
+  let data = crudStore$.get() as Record<string, Todo>;
+  return data ? Object.values(data) : [];
+});
+
 function Home() {
   const renderCount = useRef(1).current++;
 
-  let todosObject = crudStore$.get() as Record<string, Todo>;
-  let todos = todosObject ? Object.values(todosObject) : [];
+  const todos = todos$.get();
 
   let input$ = useObservable({
     todo: '',

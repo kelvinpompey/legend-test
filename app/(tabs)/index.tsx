@@ -1,18 +1,107 @@
 import { Stack } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
 
-import { ScreenContent } from '~/components/ScreenContent';
+import { linked, observable, observe } from '@legendapp/state';
+import { syncedCrud } from '@legendapp/state/sync-plugins/crud';
 
-export default function Home() {
+import { Memo, observer, Reactive, useObservable } from '@legendapp/state/react';
+
+import { Button } from '~/components/Button';
+import { useRef } from 'react';
+import { generateRandomString } from '~/lib/random';
+
+let BASE_URL = 'https://jsonplaceholder.typicode.com/';
+
+type Todo = {
+  completed: boolean;
+  id: string;
+  title: string;
+  userId: string;
+};
+
+const crudStore$ = observable(
+  syncedCrud({
+    list: () => fetch(`${BASE_URL}/todos?_limit=10`).then((res) => res.json()),
+    create: (value, params) => {
+      console.log('create value ', value, params);
+
+      fetch(`${BASE_URL}/todos?_limit=10`, {
+        method: 'post',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(value),
+      }).then((res) => res.json());
+    },
+    update(input, params) {
+      console.log('update ', input, params);
+      fetch(`${BASE_URL}/todos/${input.id}?_limit=10`, {
+        method: 'put',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(input),
+      }).then((res) => res.json());
+    },
+  })
+);
+
+function Home() {
+  const renderCount = useRef(1).current++;
+
+  let todosObject = crudStore$.get() as Record<string, Todo>;
+  let todos = todosObject ? Object.values(todosObject) : [];
+
+  let input$ = useObservable({
+    todo: '',
+  });
+
   return (
     <>
       <Stack.Screen options={{ title: 'Tab One' }} />
       <View style={styles.container}>
-        <ScreenContent path="app/(tabs)/index.tsx" title="Tab One" />
+        <Text>Renders: {renderCount}</Text>
+
+        <FlatList
+          data={todos} // Use the array from the observable store
+          keyExtractor={(item, index) => index.toString()} // Ensure each item has a unique key
+          renderItem={({ item }) => (
+            <View className="flex-1 flex-row justify-between">
+              <Text className="max-w-[250px] text-2xl">
+                {item.title} {item.completed ? '*' : ''}
+              </Text>
+              <View>
+                <Button
+                  title="Complete"
+                  onPress={() => {
+                    crudStore$[item.id].completed.set(true);
+                  }}></Button>
+              </View>
+            </View>
+          )}
+          contentContainerStyle={{ padding: 16 }}
+        />
+
+        <Reactive.TextInput placeholder="Item" $value={input$.todo} style={{ padding: 16 }} />
+        <Button
+          onPress={() => {
+            let id = generateRandomString();
+
+            console.log('id ', id);
+
+            crudStore$[id].set({
+              id,
+              title: input$.get().todo,
+              completed: false,
+            });
+          }}
+          title="Add Item"></Button>
       </View>
     </>
   );
 }
+
+export default observer(Home);
 
 const styles = StyleSheet.create({
   container: {
